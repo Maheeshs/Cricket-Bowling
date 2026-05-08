@@ -86,7 +86,7 @@ public class CricketBallController : MonoBehaviour
             {
                 // Off‑spin kicks right, Leg‑spin kicks left
                 Vector3 side = (spinType == SpinType.OffSpin) ? Vector3.right : Vector3.left;
-                vel += side * spinStrength * (preBounceSpeed * 0.2f);
+                vel += side * spinStrength * (preBounceSpeed * 0.1f);
             }
 
             rb.velocity = vel;
