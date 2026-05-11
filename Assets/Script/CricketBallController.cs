@@ -12,84 +12,127 @@ public class CricketBallController : MonoBehaviour
     public SpinType spinType;
 
     public float swingStrength = 6f;
-    public float spinStrength = 4f;
-
-    public LayerMask groundLayer;
+    public float spinStrength = 6f;
 
     Rigidbody rb;
 
-    [HideInInspector] public Vector3 trueDirection;
-    [HideInInspector] public float preBounceSpeed;
+    Vector3 startPos;
+    Vector3 targetPos;
+    Vector3 controlPoint;
 
-    bool hasBowled;
-    bool hasBounced;
+    float flightTime = 1.2f;
+    float timer;
 
-    private Vector3 startPos;
-    private Vector3 targetPos;
+    bool launched;
+    bool bounced;
 
-    void Awake() => rb = GetComponent<Rigidbody>();
-    void Start() => Destroy(gameObject, 10f);
+    Vector3 lastPosition;
+    Vector3 tangentDirection;
+
+    void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+    }
+
+    void Start()
+    {
+        Destroy(gameObject, 10f);
+    }
 
     public void LaunchBall(Vector3 velocity, Vector3 start, Vector3 target)
     {
-        hasBowled = true;
-        preBounceSpeed = velocity.magnitude;
-        trueDirection = velocity.normalized;
-        rb.velocity = velocity;
+        launched = true;
 
         startPos = start;
         targetPos = target;
-    }
 
-    void FixedUpdate()
-    {
-        if (!hasBowled || hasBounced) return;
+        timer = 0f;
+
+        rb.isKinematic = true;
+
+        // SWING CONTROL POINT
+        Vector3 mid = (start + target) * 0.5f;
 
         if (ballType == BallType.Swing)
         {
-            // Inswing = curve left, Outswing = curve right (world axes)
-            Vector3 side = (swingType == SwingType.Outswing) ? Vector3.right : Vector3.left;
+            Vector3 side =
+                (swingType == SwingType.Outswing)
+                ? Vector3.right
+                : Vector3.left;
 
-            float totalDist = Vector3.Distance(startPos, targetPos);
-            float traveled = Vector3.Distance(startPos, transform.position);
-            float progress = Mathf.Clamp01(traveled / totalDist);
-
-            // Swing force peaks mid‑flight, fades near marker
-            float swingForce = Mathf.Sin(progress * Mathf.PI) * swingStrength;
-
-            // Increase multiplier for stronger swing
-            rb.AddForce(side * swingForce * 1.2f, ForceMode.Acceleration);
-
-            trueDirection = rb.velocity.normalized;
+            controlPoint = mid + side * swingStrength * 2.5f;
+        }
+        else
+        {
+            // Spin bowls mostly straight
+            controlPoint = mid;
         }
 
-        else if (ballType == BallType.Spin)
-        {
-            // Apply torque for seam rotation
-            float spinTorque = (spinType == SpinType.OffSpin ? 1f : -1f) * spinStrength * 50f;
-            rb.AddTorque(Vector3.up * spinTorque, ForceMode.Force);
+        lastPosition = start;
+    }
 
-            trueDirection = rb.velocity.normalized;
+    void Update()
+    {
+        if (!launched || bounced)
+            return;
+
+        timer += Time.deltaTime;
+
+        float t = timer / flightTime;
+        t = Mathf.Clamp01(t);
+
+        // QUADRATIC BEZIER
+        Vector3 pos =
+            Mathf.Pow(1 - t, 2) * startPos +
+            2 * (1 - t) * t * controlPoint +
+            Mathf.Pow(t, 2) * targetPos;
+
+        // Height arc
+        pos.y += Mathf.Sin(t * Mathf.PI) * 2f;
+
+        transform.position = pos;
+
+        // Tangent direction
+        tangentDirection = (pos - lastPosition).normalized;
+
+        if (tangentDirection != Vector3.zero)
+            transform.forward = tangentDirection;
+
+        lastPosition = pos;
+
+        // REACHED MARKER
+        if (t >= 1f)
+        {
+            BounceBall();
         }
     }
 
-    private void OnCollisionEnter(Collision collision)
+    void BounceBall()
     {
-        if (((1 << collision.gameObject.layer) & groundLayer) != 0 && !hasBounced)
+        bounced = true;
+
+        rb.isKinematic = false;
+
+        // Lift slightly above ground before physics starts
+        transform.position += Vector3.up * 0.15f;
+
+        // Tangent forward speed
+        Vector3 bounceVelocity = tangentDirection * 18f;
+
+        // REAL visible bounce
+        bounceVelocity.y = 6f;
+
+        // Massive spin turn
+        if (ballType == BallType.Spin)
         {
-            hasBounced = true;
+            Vector3 side =
+                (spinType == SpinType.OffSpin)
+                ? Vector3.right
+                : Vector3.left;
 
-            Vector3 straight = trueDirection * preBounceSpeed;
-            Vector3 vel = straight + Vector3.up * 1.2f;
-
-            if (ballType == BallType.Spin)
-            {
-                // Off‑spin kicks right, Leg‑spin kicks left
-                Vector3 side = (spinType == SpinType.OffSpin) ? Vector3.right : Vector3.left;
-                vel += side * spinStrength * (preBounceSpeed * 0.1f);
-            }
-
-            rb.velocity = vel;
+            bounceVelocity += side * spinStrength * 4f;
         }
+
+        rb.velocity = bounceVelocity;
     }
 }

@@ -20,51 +20,56 @@ public class BowlingManager : MonoBehaviour
 
     void Start()
     {
-        // Default: Swing Inswing
+        // Default selection
         SelectSwingType();
         SelectInswing();
+
+        bowlingMeter.StartMeter();
     }
 
     // =========================
-    // Top‑level Ball Type Buttons
+    // Ball Type Buttons
     // =========================
     public void SelectSwingType()
     {
         selectedBallType = CricketBallController.BallType.Swing;
-        Debug.Log("Ball type set to Swing");
+        Debug.Log("Ball Type: Swing");
     }
 
     public void SelectSpinType()
     {
         selectedBallType = CricketBallController.BallType.Spin;
-        Debug.Log("Ball type set to Spin");
+        Debug.Log("Ball Type: Spin");
     }
 
     // =========================
-    // Subtype Buttons
+    // Swing Types
     // =========================
     public void SelectInswing()
     {
         selectedSwingType = CricketBallController.SwingType.Inswing;
-        Debug.Log("Selected Swing subtype: Inswing");
+        Debug.Log("Swing: Inswing");
     }
 
     public void SelectOutswing()
     {
         selectedSwingType = CricketBallController.SwingType.Outswing;
-        Debug.Log("Selected Swing subtype: Outswing");
+        Debug.Log("Swing: Outswing");
     }
 
+    // =========================
+    // Spin Types
+    // =========================
     public void SelectOffSpin()
     {
         selectedSpinType = CricketBallController.SpinType.OffSpin;
-        Debug.Log("Selected Spin subtype: OffSpin");
+        Debug.Log("Spin: OffSpin");
     }
 
     public void SelectLegSpin()
     {
         selectedSpinType = CricketBallController.SpinType.LegSpin;
-        Debug.Log("Selected Spin subtype: LegSpin");
+        Debug.Log("Spin: LegSpin");
     }
 
     // =========================
@@ -72,50 +77,40 @@ public class BowlingManager : MonoBehaviour
     // =========================
     public void BowlButton()
     {
-        if (canBowl) Bowl();
+        if (canBowl)
+            Bowl();
     }
 
     void Bowl()
     {
         canBowl = false;
+
         bowlingMeter.StopMeter();
 
         float movementPercent = bowlingMeter.GetMovementPercent();
 
-        currentBall = Instantiate(ballPrefab, bowlPoint.position, Quaternion.identity);
+        currentBall = Instantiate(
+            ballPrefab,
+            bowlPoint.position,
+            Quaternion.identity
+        );
 
-        // Apply selected type + subtype
+        // Apply selected settings
         currentBall.ballType = selectedBallType;
         currentBall.swingType = selectedSwingType;
         currentBall.spinType = selectedSpinType;
 
-        // Debug which ball is being bowled
-        if (currentBall.ballType == CricketBallController.BallType.Swing)
-            Debug.Log($"Bowling Swing: {currentBall.swingType}");
-        else if (currentBall.ballType == CricketBallController.BallType.Spin)
-            Debug.Log($"Bowling Spin: {currentBall.spinType}");
+        // Strong visible swing
+        currentBall.swingStrength = Mathf.Lerp(2f, 8f, movementPercent);
+
+        // Spin strength
+        currentBall.spinStrength = Mathf.Lerp(1f, 5f, movementPercent);
 
         Vector3 start = bowlPoint.position;
         Vector3 target = marker.transform.position;
 
-        float gravity = Mathf.Abs(Physics.gravity.y);
-        float flightTime = 1.2f;
-
-        Vector3 displacement = target - start;
-        Vector3 displacementXZ = new Vector3(displacement.x, 0, displacement.z);
-
-        Vector3 velocityXZ = displacementXZ / flightTime;
-        float velocityY = (displacement.y / flightTime) + 0.5f * gravity * flightTime;
-
-        Vector3 velocity = velocityXZ + Vector3.up * velocityY;
-
-        if (currentBall.ballType == CricketBallController.BallType.Swing)
-            currentBall.swingStrength = 2.5f * movementPercent;
-        else if (currentBall.ballType == CricketBallController.BallType.Spin)
-            currentBall.spinStrength = 2f * movementPercent;
-
-        currentBall.trueDirection = displacementXZ.normalized;
-        currentBall.LaunchBall(velocity, start, target);
+        // Launch using curve system
+        currentBall.LaunchBall(Vector3.zero, start, target);
 
         StartCoroutine(ResetBowling());
     }
@@ -123,7 +118,9 @@ public class BowlingManager : MonoBehaviour
     IEnumerator ResetBowling()
     {
         yield return new WaitForSeconds(nextBallDelay);
+
         canBowl = true;
+
         bowlingMeter.StartMeter();
     }
 }
